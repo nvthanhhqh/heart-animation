@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trái Tim Yêu Thương</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Montserrat', sans-serif;
+            cursor: grab;
+        }
+        body:active {
+            cursor: grabbing;
+        }
+        canvas {
+            display: block;
+        }
+        #dedication {
+            position: absolute;
+            top: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 2rem;
+            text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f;
+            text-align: center;
+            width: 90%;
+            z-index: 10;
+        }
+        @media (max-width: 768px) {
+            #dedication {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="dedication">Gửi "Gái giỏi"s của Scots English Kim Giang</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Basic Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // --- Camera Controls ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = false;
+        controls.minDistance = 40;
+        controls.maxDistance = 150;
+
+        camera.position.set(0, 15, 100);
+        controls.update();
+
+        // --- Starry Background ---
+        const starVertices = [];
+        for (let i = 0; i < 10000; i++) {
+            const x = (Math.random() - 0.5) * 2000;
+            const y = (Math.random() - 0.5) * 2000;
+            const z = (Math.random() - 0.5) * 2000;
+            starVertices.push(x, y, z);
+        }
+        const starGeometry = new THREE.BufferGeometry();
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1 });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // --- 3D Heart Shell from Tiny Dots ---
+        function createVideoHeart(count, scale, colorHsl, tolerance, opacity) {
+            const particles = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            
+            let pointsCreated = 0;
+            const boundingBox = 1.3;
+
+            while (pointsCreated < count) {
+                const x = (Math.random() - 0.5) * boundingBox * 2.5;
+                const y = (Math.random() - 0.5) * boundingBox * 2.5;
+                const z = (Math.random() - 0.5) * boundingBox * 2.5;
+
+                const term1 = x * x + (9.0 / 4.0) * y * y + z * z - 1.0;
+                const term2 = x * x * z * z * z;
+                const term3 = (9.0 / 80.0) * y * y * z * z * z;
+                const equationResult = term1 * term1 * term1 - term2 - term3;
+                
+                if (Math.abs(equationResult) < tolerance) {
+                    const i3 = pointsCreated * 3;
+                    
+                    positions[i3] = x * scale;
+                    positions[i3 + 1] = z * scale * 1.0; 
+                    positions[i3 + 2] = -y * scale;
+                    
+                    const color = new THREE.Color();
+                    color.setHSL(colorHsl.h, colorHsl.s, colorHsl.l + (Math.random() - 0.5) * 0.1);
+                    colors[i3] = color.r;
+                    colors[i3 + 1] = color.g;
+                    colors[i3 + 2] = color.b;
+                    
+                    pointsCreated++;
+                }
+            }
+            
+            particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                size: 0.3,
+                vertexColors: true,
+                blending: THREE.NormalBlending,
+                transparent: true,
+                opacity: opacity, 
+                depthWrite: true
+            });
+            return new THREE.Points(particles, particleMaterial);
+        }
+        
+        const heartGroup = new THREE.Group();
+        
+        const outerLayer = createVideoHeart(80000, 32, { h: 0.95, s: 1.0, l: 0.8 }, 0.0005, 0.7);
+        heartGroup.add(outerLayer);
+        
+        const heartShell = createVideoHeart(150000, 30, { h: 0.0, s: 1.0, l: 0.5 }, 0.0003, 0.9);
+        heartGroup.add(heartShell);
+        
+        heartGroup.position.y = 5;
+        scene.add(heartGroup);
+
+
+        // --- Curved Text Meshes (4 Rings) ---
+        const textRingGroups = [];
+        const allPhrases = [
+            "Happy Vietnamese Women's Day!",
+            "Chúc mừng ngày phụ nữ Việt Nam 20/10",
+            "Chúc mọi người có thật nhiều niềm vui, sức khoẻ",
+            "Chúc mọi người có một ngày lễ ấm áp, hạnh phúc và trọn vẹn"
+        ];
+
+        function createTextCanvas(text) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const fontSize = 48;
+            const font = `bold ${fontSize}px Montserrat`;
+            context.font = font;
+            const textMetrics = context.measureText(text);
+            const textWidth = textMetrics.width;
+            canvas.width = textWidth + 30;
+            canvas.height = 96;
+            const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#ffafff');
+            gradient.addColorStop(1, '#aaffff');
+            context.font = font;
+            context.fillStyle = gradient;
+            context.shadowColor = '#ff80ff';
+            context.shadowBlur = 15;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            return canvas;
+        }
+
+        allPhrases.forEach((phrase, index) => {
+            const ringRadius = 30 + index * 8;
+            const ringGroup = new THREE.Group();
+            ringGroup.position.y = -20;
+            const canvas = createTextCanvas(phrase + " \u00A0 \u00A0 \u00A0 ");
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            const aspectRatio = canvas.width / canvas.height;
+            const meshHeight = 6;
+            const meshWidth = meshHeight * aspectRatio;
+            const thetaLength = meshWidth / ringRadius;
+            const repeats = Math.ceil((2 * Math.PI) / thetaLength);
+            texture.repeat.x = repeats;
+            const geometry = new THREE.CylinderGeometry(
+                ringRadius, ringRadius,
+                meshHeight,
+                128, repeats,
+                true, 0, 2 * Math.PI
+            );
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                alphaTest: 0.1
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            ringGroup.add(mesh);
+            ringGroup.userData.speed = (index % 2 === 0 ? -1 : 1) * (0.1 + index * 0.02);
+            textRingGroups.push(ringGroup);
+            scene.add(ringGroup);
+        });
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsedTime = clock.getElapsedTime();
+
+            controls.update(); // Update camera controls
+
+            if (heartGroup) {
+                const beatSpeed = 3;
+                const beatIntensity = 0.05;
+                const baseScale = 1.0;
+                const scale = baseScale + beatIntensity * Math.abs(Math.sin(elapsedTime * beatSpeed));
+                heartGroup.scale.set(scale, scale, scale);
+            }
+            
+            textRingGroups.forEach(group => {
+                group.children[0].material.map.offset.x += group.userData.speed * delta * 0.1;
+            });
+
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+
+        // --- Handle Window Resize ---
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+    </script>
+    
+</body>
+</html>
+
