@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Heart Particles — 20/10 Greeting</title>
+  <style>
+    html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:Inter, Arial, sans-serif}
+    #container{position:fixed;inset:0}
+    /* ring text styling */
+    .ring-wrap{position:absolute;left:50%;transform:translateX(-50%);bottom:8%;width:100%;display:flex;justify-content:center;pointer-events:none}
+    .ring{position:relative;width:720px;height:120px;transform-style:preserve-3d}
+    .ring .char{position:absolute;left:50%;top:50%;transform-origin:0 0;white-space:pre;color:white;font-weight:600;text-shadow:0 0 6px rgba(255,255,255,0.15);font-size:20px}
+    .controls{position:fixed;right:20px;top:20px;background:rgba(255,255,255,0.06);padding:10px;border-radius:8px;color:#fff;backdrop-filter: blur(6px)}
+    .controls label{display:block;font-size:13px;margin-bottom:6px}
+    .controls input[type=range]{width:160px}
+    .credits{position:fixed;left:12px;bottom:12px;color:#aaa;font-size:13px}
+    @media (max-width:700px){.ring{width:320px;height:90px}.ring .char{font-size:12px}}
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <div class="ring-wrap">
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <div class="controls">
+    <label>Nhịp tim: <span id="speedLabel">1.0</span>x</label>
+    <input id="speed" type="range" min="0.4" max="2.4" step="0.05" value="1.0">
+  </div>
+
+  <div class="credits">Tạo bởi script — Dùng để upload lên web</div>
+
+  <!-- Three.js CDN -->
+  <script src="https://unpkg.com/three@0.152.0/build/three.min.js"></script>
+  <script>
+  // -------------------------
+  // Config
+  // -------------------------
+  const PARTICLE_COUNT = 12000; // tăng nếu muốn rực rỡ hơn (tùy hiệu năng)
+  const HEART_SIZE = 6.5; // scale heart shape
+  const DEPTH = 8; // thickness of particle cloud in Z
+  const OUTER_COLOR = new THREE.Color(0xFF84C7); // pink-ish
+  const INNER_COLOR = new THREE.Color(0xD90000); // red
+
+  // -------------------------
+  // Setup renderer, scene, camera
+  // -------------------------
+  const container = document.getElementById('container');
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 8, 30);
+
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
+  // subtle ambient + point light for glow effect
+  const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+  scene.add(ambient);
+  const pl = new THREE.PointLight(0xffb6d9, 0.6, 200);
+  pl.position.set(20,30,30);
+  scene.add(pl);
+
+  // -------------------------
+  // Create a small heart sprite as texture
+  // -------------------------
+  function createHeartSprite(size=64, color='#ffffff'){
+    const cvs = document.createElement('canvas');
+    cvs.width = cvs.height = size;
+    const ctx = cvs.getContext('2d');
+    ctx.clearRect(0,0,size,size);
+    ctx.fillStyle = color;
+    ctx.translate(size/2, size/2);
+    const scale = size/2.5;
+    ctx.beginPath();
+    // draw a heart path using bezier curves
+    ctx.moveTo(0, -scale/2);
+    ctx.bezierCurveTo(scale, -scale*1.2, scale*1.5, scale*0.2, 0, scale);
+    ctx.bezierCurveTo(-scale*1.5, scale*0.2, -scale, -scale*1.2, 0, -scale/2);
+    ctx.closePath();
+    ctx.fill();
+    return new THREE.CanvasTexture(cvs);
+  }
+
+  const heartSprite = createHeartSprite(128);
+  heartSprite.minFilter = THREE.LinearFilter;
+
+  // -------------------------
+  // Generate heart-shaped particle cloud
+  // Parametric heart (2D): x=16 sin^3 t, y=13 cos t -5 cos2t -2 cos3t - cos4t
+  // We'll sample random t and a random radius factor to fill the shape, then add z depth
+  // -------------------------
+  const positions = new Float32Array(PARTICLE_COUNT*3);
+  const colors = new Float32Array(PARTICLE_COUNT*3);
+  const sizes = new Float32Array(PARTICLE_COUNT);
+
+  function heartXY(t){
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+    return [x, y];
+  }
+
+  let p = 0;
+  for(let i=0;i<PARTICLE_COUNT;i++){
+    // pick random angle t and radial factor r to fill volume
+    const t = Math.random() * Math.PI*2; // we can sample full circle
+    const [hx, hy] = heartXY(t);
+    // radial factor so points appear denser near outline and some inside
+    const r = Math.pow(Math.random(), 0.85); // bias to outer
+    const x = hx * r * (HEART_SIZE/20) + (Math.random()-0.5)*0.25; // jitter
+    const y = hy * r * (HEART_SIZE/20) + (Math.random()-0.5)*0.25;
+    const z = (Math.random()-0.5) * DEPTH;
+
+    positions[p*3+0] = x;
+    positions[p*3+1] = y;
+    positions[p*3+2] = z;
+
+    // distance from center on XY plane, used to mix colors (outer -> inner)
+    const dist = Math.sqrt(x*x + y*y);
+    // normalize roughly by HEART_SIZE
+    const tcol = THREE.MathUtils.clamp(1 - (dist / (HEART_SIZE*0.9)), 0, 1);
+    const color = OUTER_COLOR.clone().lerp(INNER_COLOR, tcol);
+    colors[p*3+0] = color.r;
+    colors[p*3+1] = color.g;
+    colors[p*3+2] = color.b;
+
+    sizes[p] = 6 + Math.random()*6; // base size
+
+    p++;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+  // Points material using sprite and vertex colors
+  const material = new THREE.PointsMaterial({
+    size: 0.9,
+    map: heartSprite,
+    transparent: true,
+    alphaTest: 0.01,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true
+  });
+
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+
+  // subtle particle floor reflection (faint)
+  const mirrorGeo = new THREE.BufferGeometry();
+  const mirrorCount = Math.floor(PARTICLE_COUNT*0.18);
+  const mpos = new Float32Array(mirrorCount*3);
+  const mcol = new Float32Array(mirrorCount*3);
+  let idx = 0;
+  for(let i=0;i<mirrorCount;i++){
+    const xi = (Math.random()-0.5)*HEART_SIZE*1.6;
+    const yi = - (Math.random()*4 + 9);
+    const zi = (Math.random()-0.5)*6;
+    mpos[idx*3+0] = xi; mpos[idx*3+1] = yi; mpos[idx*3+2] = zi;
+    const c = new THREE.Color(0xff7fbf);
+    mcol[idx*3+0] = c.r; mcol[idx*3+1] = c.g; mcol[idx*3+2] = c.b;
+    idx++;
+  }
+  mirrorGeo.setAttribute('position', new THREE.BufferAttribute(mpos,3));
+  mirrorGeo.setAttribute('color', new THREE.BufferAttribute(mcol,3));
+  const mirrorMat = new THREE.PointsMaterial({size:0.7,map:heartSprite,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,vertexColors:true,opacity:0.45});
+  const mirrorPoints = new THREE.Points(mirrorGeo, mirrorMat);
+  scene.add(mirrorPoints);
+
+  // -------------------------
+  // Animation (heartbeat) and resize
+  // -------------------------
+  let clock = 0;
+  let last = performance.now();
+  let speed = 1.0; // beats multiplier
+
+  function animate(t){
+    const now = performance.now();
+    const dt = (now-last)/1000; last = now;
+    clock += dt * speed;
+
+    // heartbeat: scale follows sin^2 to give pulsing feel
+    const beat = 1 + 0.09 * Math.sin(clock*2.8) + 0.06 * Math.sin(clock*5.6);
+    points.scale.set(beat, beat, beat);
+
+    // slight rotation to make it dynamic
+    points.rotation.y = Math.sin(clock*0.4) * 0.08;
+    points.rotation.x = Math.sin(clock*0.25) * 0.03;
+
+    // mirror subtle wobble
+    mirrorPoints.position.y = -10 + Math.sin(clock*0.9)*0.08;
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+
+  window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // -------------------------
+  // Simple UI
+  // -------------------------
+  const speedInput = document.getElementById('speed');
+  const speedLabel = document.getElementById('speedLabel');
+  speedInput.addEventListener('input', (e)=>{speed = parseFloat(e.target.value); speedLabel.textContent = speed.toFixed(2)});
+
+  // -------------------------
+  // Build ring text using DOM spans positioned around circle
+  // -------------------------
+  const ringEl = document.getElementById('ring');
+  const message = '  Chúc mừng ngày Phụ nữ Việt Nam 20/10 • Happy Woman\'s Day 20/10 • Chúc mọi người luôn xinh đẹp, nhiều niềm vui  • ';
+  // repeat message to fill
+  let full = message.repeat(6);
+  const R = Math.min(ringEl.clientWidth, 900)/2 - 20;
+  const chars = Array.from(full);
+  function buildRing(){
+    ringEl.innerHTML = '';
+    const rect = ringEl.getBoundingClientRect();
+    const radius = Math.min(rect.width, 900)/2 - 20;
+    const N = chars.length;
+    for(let i=0;i<N;i++){
+      const span = document.createElement('span');
+      span.className = 'char';
+      span.textContent = chars[i];
+      const angle = (i/N) * Math.PI*2; // rad
+      const deg = angle * 180/Math.PI;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * (radius*0.42); // oval to match look
+      span.style.transform = `translate(-50%,-50%) rotate(${deg}deg) translateY(${ -radius }px) rotate(${ -deg }deg)`;
+      ringEl.appendChild(span);
+    }
+  }
+  buildRing();
+  // animate rotation
+  let rot = 0;
+  function rotateRing(){
+    rot += 0.0025 * speed; // tie to heartbeat speed
+    ringEl.style.transform = `rotate(${rot}rad)`;
+    requestAnimationFrame(rotateRing);
+  }
+  rotateRing();
+
+  // rebuild on resize
+  window.addEventListener('resize', ()=>{buildRing()});
+
+  // center camera on load
+  function focus(){
+    camera.lookAt(0,6,0);
+  }
+  focus();
+
+  // Optional: allow click/touch to momentarily increase beat
+  window.addEventListener('pointerdown', ()=>{speed *= 1.6; setTimeout(()=>{speed /= 1.6}, 380)});
+  </script>
+</body>
+</html>
